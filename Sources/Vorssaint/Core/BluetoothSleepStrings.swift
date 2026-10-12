@@ -224,7 +224,7 @@ extension BluetoothSleepStrings {
         modeLabel: "Action à la mise en veille",
         powerOffMode: "Couper le Bluetooth",
         selectedDevicesMode: "Déconnecter les appareils sélectionnés",
-        selectedCaption: "Le Bluetooth reste activé. Seuls les appareils cochés sont déconnectés ; laissez le clavier et la souris décochés.",
+        selectedCaption: "Le Bluetooth reste activé. Seuls les appareils cochés sont déconnectés ; laissez le clavier et la souris décochés.",
         devicesLabel: "Appareils à déconnecter",
         noDevices: "Aucun appareil Bluetooth jumelé trouvé. Si des appareils manquent, vérifiez l’accès au Bluetooth dans Réglages Système.",
         refresh: "Actualiser les appareils",
