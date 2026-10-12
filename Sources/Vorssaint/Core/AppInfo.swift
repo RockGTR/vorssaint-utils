@@ -13,6 +13,16 @@ enum AppInfo {
     static let discordURL = URL(string: "https://discord.gg/M6BwWH4BJp")!
     static let socialURL = URL(string: "https://x.com/vorssaint")!
 
+    /// Personal builds use the fork's release assets. Missing metadata preserves
+    /// the official channel for bundles produced from upstream source.
+    static var personalUpdateRepository: String? {
+        Bundle.main.object(forInfoDictionaryKey: "VorssaintUpdateRepository") as? String
+    }
+
+    static var updateRepository: String {
+        personalUpdateRepository ?? "vorssaint/vorssaint-utils"
+    }
+
     /// The bundle version. The fallback only applies to the bare binary
     /// (e.g. `--selftest`), never the shipped app, which reads its Info.plist.
     static var version: String {

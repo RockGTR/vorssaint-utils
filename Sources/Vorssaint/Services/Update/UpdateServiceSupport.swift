@@ -143,12 +143,42 @@ enum UpdateServiceSupport {
         let dmgURL: URL?
         let dmgExpectedBytes: Int64?
         let body: String?
+        var dmgDigest: String? = nil
+    }
+
+    static func personalBuildNumber(_ version: String) -> Int? {
+        let parts = version.components(separatedBy: "+personal.")
+        guard parts.count == 2, !parts[1].isEmpty,
+              parts[1].utf8.allSatisfy({ (48...57).contains($0) }),
+              let number = Int(parts[1]), number > 0 else { return nil }
+        return number
+    }
+
+    /// GitHub supplies this digest through its HTTPS release-asset API.
+    static func sha256Hex(from digest: String?) -> String? {
+        guard let digest, digest.hasPrefix("sha256:") else { return nil }
+        let hex = String(digest.dropFirst(7)).lowercased()
+        guard hex.utf8.count == 64,
+              hex.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else { return nil }
+        return hex
     }
 
     /// Selects the best update candidate from a list of releases based on channel preferences.
     static func selectUpdate(from candidates: [ReleaseCandidate],
                              currentVersion: String,
-                             includeBetas: Bool) -> ReleaseCandidate? {
+                             includeBetas: Bool,
+                             personalRepository: String? = nil) -> ReleaseCandidate? {
+        if let personalRepository {
+            let currentBuild = personalBuildNumber(currentVersion) ?? 0
+            return candidates.filter { candidate in
+                guard !candidate.isDraft, !candidate.isPrerelease,
+                      let number = personalBuildNumber(candidate.tagName), number > currentBuild,
+                      sha256Hex(from: candidate.dmgDigest) != nil,
+                      let url = candidate.dmgURL, url.scheme == "https", url.host == "github.com",
+                      url.path.hasPrefix("/\(personalRepository)/releases/download/") else { return false }
+                return true
+            }.max { (personalBuildNumber($0.tagName) ?? 0) < (personalBuildNumber($1.tagName) ?? 0) }
+        }
         let eligible = candidates.filter { candidate in
             guard !candidate.isDraft else { return false }
             guard candidate.dmgURL != nil else { return false }

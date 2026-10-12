@@ -659,6 +659,19 @@ cp Resources/agent-prices.json "$STAGE/Contents/Resources/agent-prices.json"
 cp Resources/com.vorssaint.utils.fan-control.plist \
     "$STAGE/Contents/Library/LaunchDaemons/$FAN_HELPER_ID.plist"
 cp Resources/Info.plist "$STAGE/Contents/Info.plist"
+# A personal rebuild may have the same upstream version. Keep its unique build
+# number in SemVer metadata, matching the fork release tag without making it beta.
+if [[ -n "${VORSSAINT_PERSONAL_BUILD_NUMBER:-}" ]] && (( ! DEV )); then
+    if [[ ! "$VORSSAINT_PERSONAL_BUILD_NUMBER" =~ ^[1-9][0-9]{0,17}$ ]]; then
+        echo "Invalid personal build number" >&2
+        exit 1
+    fi
+    /usr/libexec/PlistBuddy -c 'Print :VorssaintUpdateRepository' "$STAGE/Contents/Info.plist" >/dev/null
+    UPSTREAM_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$STAGE/Contents/Info.plist")"
+    PERSONAL_VERSION="${UPSTREAM_VERSION%%+*}+personal.$VORSSAINT_PERSONAL_BUILD_NUMBER"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $PERSONAL_VERSION" "$STAGE/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VORSSAINT_PERSONAL_BUILD_NUMBER" "$STAGE/Contents/Info.plist"
+fi
 cp CHANGELOG.md "$STAGE/Contents/Resources/CHANGELOG.md"
 for lproj in Resources/*.lproj(N); do
     cp -R "$lproj" "$STAGE/Contents/Resources/"

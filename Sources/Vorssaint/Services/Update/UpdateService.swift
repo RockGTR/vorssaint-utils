@@ -27,8 +27,9 @@ final class UpdateService: ObservableObject {
     /// preview. Set alongside `.available`; cleared otherwise.
     @Published private(set) var availableNotes: String?
 
-    private let repository = "vorssaint/vorssaint-utils"
+    private var repository: String { AppInfo.updateRepository }
     private var downloadURL: URL?
+    private var downloadDigest: String?
     /// Size the release advertises for the asset, used to bound the download.
     private var downloadExpectedBytes: Int64?
     private var refreshTimer: Timer?
@@ -118,7 +119,8 @@ final class UpdateService: ObservableObject {
         if case .installing = state { return }
         state = .checking
 
-        let endpoint = includeBetaUpdates
+        let includeBetas = includeBetaUpdates && AppInfo.personalUpdateRepository == nil
+        let endpoint = includeBetas
             ? "https://api.github.com/repos/\(repository)/releases?per_page=10"
             : "https://api.github.com/repos/\(repository)/releases/latest"
 
@@ -127,18 +129,26 @@ final class UpdateService: ObservableObject {
         request.setValue("Vorssaint/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self else { return }
             DispatchQueue.main.async {
                 self.lastChecked = Date()
-                guard let data, error == nil else {
+                self.downloadURL = nil
+                self.downloadDigest = nil
+                if AppInfo.personalUpdateRepository != nil,
+                   (response as? HTTPURLResponse)?.statusCode == 404 {
+                    self.availableNotes = nil
+                    self.state = .upToDate // The fork has not published its first build yet.
+                    return
+                }
+                guard let data, error == nil, (response as? HTTPURLResponse)?.statusCode == 200 else {
                     self.availableNotes = nil
                     self.state = .failed(error?.localizedDescription ?? "-")
                     return
                 }
 
                 let releases: [GitHubRelease]
-                if self.includeBetaUpdates {
+                if includeBetas {
                     releases = (try? JSONDecoder().decode([GitHubRelease].self, from: data)) ?? []
                 } else if let single = try? JSONDecoder().decode(GitHubRelease.self, from: data) {
                     releases = [single]
@@ -153,24 +163,29 @@ final class UpdateService: ObservableObject {
                 }
 
                 let candidates = releases.map { rel -> UpdateServiceSupport.ReleaseCandidate in
-                    let asset = rel.assets.first { $0.name.hasSuffix(".dmg") }
+                    let asset = rel.assets.first {
+                        AppInfo.personalUpdateRepository == nil ? $0.name.hasSuffix(".dmg") : $0.name == "Vorssaint-Personal.dmg"
+                    }
                     return UpdateServiceSupport.ReleaseCandidate(
                         tagName: rel.tagName,
                         isPrerelease: rel.prerelease ?? false,
                         isDraft: rel.draft ?? false,
                         dmgURL: asset?.browserDownloadURL,
                         dmgExpectedBytes: asset?.size,
-                        body: rel.body
+                        body: rel.body,
+                        dmgDigest: asset?.digest
                     )
                 }
 
                 if let chosen = UpdateServiceSupport.selectUpdate(
                     from: candidates,
                     currentVersion: AppInfo.version,
-                    includeBetas: self.includeBetaUpdates
+                    includeBetas: includeBetas,
+                    personalRepository: AppInfo.personalUpdateRepository
                 ) {
                     let versionClean = chosen.tagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
                     self.downloadURL = chosen.dmgURL
+                    self.downloadDigest = UpdateServiceSupport.sha256Hex(from: chosen.dmgDigest)
                     self.downloadExpectedBytes = chosen.dmgExpectedBytes
                     self.availableNotes = ReleaseNotes.inAppUpdateNotes(from: chosen.body)
                     self.state = .available(version: versionClean)
@@ -346,7 +361,8 @@ final class UpdateService: ObservableObject {
         let scriptURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("vorssaint-update-\(pid)-\(UUID().uuidString).sh")
         do {
-            try UpdateInstallerSupport.installerScript()
+            try UpdateInstallerSupport.installerScript(personalRepository: AppInfo.personalUpdateRepository,
+                                                       expectedDigest: downloadDigest)
                 .write(to: scriptURL, atomically: true, encoding: .utf8)
         } catch {
             failInstall(dmgPath: dmgPath, message: error.localizedDescription)
@@ -383,7 +399,9 @@ final class UpdateService: ObservableObject {
                                                                     pid: pid,
                                                                     resultPath: resultPath,
                                                                     uid: getuid(),
-                                                                    expectedVersion: expectedVersion)
+                                                                    expectedVersion: expectedVersion,
+                                                                    personalRepository: AppInfo.personalUpdateRepository,
+                                                                    expectedDigest: downloadDigest)
         // The in-process authorization holds the main thread until it is
         // answered, and the system dialog never appears while the Extra
         // Brightness overlay is on screen (#1917). Once the request waits,
@@ -606,11 +624,13 @@ private struct GitHubRelease: Decodable {
         let name: String
         let browserDownloadURL: URL
         let size: Int64?
+        let digest: String?
 
         enum CodingKeys: String, CodingKey {
             case name
             case browserDownloadURL = "browser_download_url"
             case size
+            case digest
         }
     }
 }

@@ -213,6 +213,10 @@ See the [permissions guide](docs/PERMISSIONS.md) for which features need access 
 
 ### Build it yourself
 
+This personal branch supports automated upstream builds and updates from
+`RockGTR/vorssaint-utils`. See [personal builds and updates](docs/PERSONAL-UPDATES.md)
+for setup, merge-conflict handling, and installation.
+
 ```sh
 git clone https://github.com/vorssaint/vorssaint-utils.git
 cd vorssaint-utils
