@@ -1,0 +1,170 @@
+name: Personal upstream build
+
+on:
+  schedule:
+    - cron: '23 11 * * *'
+  push:
+    branches: [main, personal/scroll-and-bluetooth]
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: Build again even if the source has not changed
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-upstream-release
+  cancel-in-progress: false
+
+env:
+  PERSONAL_BRANCH: personal/scroll-and-bluetooth
+
+jobs:
+  build:
+    if: github.repository == 'RockGTR/vorssaint-utils'
+    runs-on: macos-26
+    timeout-minutes: 45
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+      source_sha: ${{ steps.merge.outputs.source_sha }}
+      upstream_sha: ${{ steps.merge.outputs.upstream_sha }}
+      tag: ${{ steps.package.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.PERSONAL_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Merge upstream, retaining personal changes
+        id: merge
+        run: bash Tools/sync-personal-upstream.sh
+
+      - name: Check whether this source is already published
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.merge.outputs.source_sha }}
+          UPSTREAM_SHA: ${{ steps.merge.outputs.upstream_sha }}
+          REBUILD: ${{ inputs.rebuild || false }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          BODY="$(jq -r '[.[] | select(.draft == false and .prerelease == false)] | first | .body // ""' "$RUNNER_TEMP/releases.json")"
+          if [[ "$REBUILD" != true ]] &&
+             [[ "$BODY" == *"<!-- personal-source: $SOURCE_SHA -->"* ]] &&
+             [[ "$BODY" == *"<!-- personal-upstream: $UPSTREAM_SHA -->"* ]]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'No source changes since the last personal release.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            echo "VORSSAINT_PERSONAL_BUILD_NUMBER=$(date -u +%s)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build personal app
+        if: steps.check.outputs.changed == 'true'
+        run: ./build.sh
+
+      - name: Selftest
+        if: steps.check.outputs.changed == 'true'
+        run: ./build/Vorssaint --selftest
+
+      - name: Unit tests
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          ./build.sh --test
+          python3 Tests/test_personal_upstream.py
+
+      - name: Package and record exact source
+        if: steps.check.outputs.changed == 'true'
+        id: package
+        env:
+          SOURCE_SHA: ${{ steps.merge.outputs.source_sha }}
+          UPSTREAM_SHA: ${{ steps.merge.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          ./Tools/make-dmg.sh
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/stage/Vorssaint.app/Contents/Info.plist)"
+          REPOSITORY="$(/usr/libexec/PlistBuddy -c 'Print :VorssaintUpdateRepository' build/stage/Vorssaint.app/Contents/Info.plist)"
+          test "$REPOSITORY" = "$GITHUB_REPOSITORY"
+          test "$VERSION" = "${VERSION%%+*}+personal.$VORSSAINT_PERSONAL_BUILD_NUMBER"
+          mkdir -p dist/personal-release
+          cp "dist/Vorssaint-$VERSION.dmg" dist/personal-release/Vorssaint-Personal.dmg
+          git bundle create dist/personal-release/source.bundle HEAD
+          jq -n --arg source "$SOURCE_SHA" --arg upstream "$UPSTREAM_SHA" \
+            --arg version "$VERSION" --arg branch "$PERSONAL_BRANCH" \
+            '{source_sha: $source, upstream_sha: $upstream, version: $version, branch: $branch}' \
+            > dist/personal-release/build-info.json
+          {
+            echo "Personal build $VERSION, including the trackpad scrolling and Bluetooth sleep changes."
+            echo
+            echo "Source branch: $PERSONAL_BRANCH"
+            echo "Source commit: $SOURCE_SHA"
+            echo "Upstream commit: $UPSTREAM_SHA"
+            echo
+            echo 'Requires Apple Silicon and macOS 14 or later. This personal build is ad-hoc signed and is not notarized by Apple. macOS permissions may need to be granted again after updating.'
+            echo
+            echo "<!-- personal-source: $SOURCE_SHA -->"
+            echo "<!-- personal-upstream: $UPSTREAM_SHA -->"
+          } > dist/personal-release/release-notes.md
+          (
+            cd dist/personal-release
+            shasum -a 256 Vorssaint-Personal.dmg source.bundle build-info.json release-notes.md > SHA256SUMS
+          )
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Stage validated build for publishing
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: personal-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/personal-release
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  publish:
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: macos-26
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.PERSONAL_BRANCH }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: personal-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-bundle
+
+      - name: Verify and publish the tested source and DMG
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          (cd release-bundle && shasum -a 256 -c SHA256SUMS)
+          git fetch "$PWD/release-bundle/source.bundle" HEAD
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          git tag "$TAG" "$SOURCE_SHA"
+          gh auth setup-git
+          # Atomic, non-forced: a concurrent user push cannot be overwritten.
+          git push --atomic origin "$SOURCE_SHA:refs/heads/$PERSONAL_BRANCH" "refs/tags/$TAG"
+          gh release create "$TAG" release-bundle/Vorssaint-Personal.dmg release-bundle/build-info.json \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Personal $TAG" \
+            --notes-file release-bundle/release-notes.md
+          RELEASE_ID="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json databaseId --jq '.databaseId')"
+          DIGEST="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \
+            --jq '.[] | select(.name == "Vorssaint-Personal.dmg") | .digest')"
+          EXPECTED="sha256:$(shasum -a 256 release-bundle/Vorssaint-Personal.dmg | awk '{print $1}')"
+          test "$DIGEST" = "$EXPECTED"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          echo "Published [$TAG](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG)." >> "$GITHUB_STEP_SUMMARY"

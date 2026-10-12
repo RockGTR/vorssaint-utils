@@ -1161,6 +1161,60 @@ enum UpdateFeatureTests {
         suite.expect(selectedFromHigherBeta == nil, "user on beta turning off betas does not downgrade to older stable")
 
         let knownDigest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        let personalRepository = "RockGTR/vorssaint-utils"
+        func personalRelease(_ version: String, digest: String? = "sha256:\(knownDigest)",
+                             repository: String = personalRepository, draft: Bool = false) -> UpdateServiceSupport.ReleaseCandidate {
+            .init(tagName: "v\(version)", isPrerelease: false, isDraft: draft,
+                  dmgURL: URL(string: "https://github.com/\(repository)/releases/download/v\(version)/Vorssaint-Personal.dmg"),
+                  dmgExpectedBytes: 1000, body: nil, dmgDigest: digest)
+        }
+        func choosePersonal(_ releases: [UpdateServiceSupport.ReleaseCandidate], current: String = "3.4.1+personal.100") -> String? {
+            UpdateServiceSupport.selectUpdate(from: releases, currentVersion: current,
+                                             includeBetas: false, personalRepository: personalRepository)?.tagName
+        }
+        suite.expect(choosePersonal([personalRelease("3.4.1+personal.101")]) == "v3.4.1+personal.101",
+                     "a personal rebuild updates even when the upstream version is unchanged")
+        suite.expect(choosePersonal([personalRelease("3.4.1+personal.99"), personalRelease("3.4.1+personal.100")]) == nil,
+                     "personal builds never offer the current build or an older build")
+        suite.expect(choosePersonal([personalRelease("3.4.1+personal.101")], current: "3.4.1") != nil,
+                     "an unstamped local personal app can receive its first CI build")
+        suite.expect(choosePersonal([personalRelease("3.4.2+personal.101"), personalRelease("3.4.2+personal.102")]) == "v3.4.2+personal.102",
+                     "personal releases choose the newest build")
+        for bad in [personalRelease("3.4.1+personal.101", digest: nil),
+                    personalRelease("3.4.1+personal.101", digest: "sha256:bad"),
+                    personalRelease("3.4.1+personal.101", repository: "vorssaint/vorssaint-utils"),
+                    personalRelease("3.4.1+personal.101", draft: true),
+                    personalRelease("3.5.0"), personalRelease("3.4.1+personal.-1")] {
+            suite.expect(choosePersonal([bad]) == nil,
+                         "personal updates reject missing checksums, other repositories, drafts and unrelated tags")
+        }
+        suite.expect(!UpdateServiceSupport.isNewer("3.4.1+personal.101", than: "3.4.1+personal.100"),
+                     "official semantic comparison continues to ignore build metadata")
+        let checksumRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VorssaintPersonalUpdateTests-\(UUID().uuidString)")
+        do {
+            try FileManager.default.createDirectory(at: checksumRoot, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: checksumRoot) }
+            for digest in [nil, "invalid", knownDigest] as [String?] {
+                let dmg = checksumRoot.appendingPathComponent("untrusted.dmg")
+                let marker = checksumRoot.appendingPathComponent("result")
+                let script = checksumRoot.appendingPathComponent("installer.sh")
+                try Data("tampered download".utf8).write(to: dmg)
+                try UpdateInstallerSupport.installerScript(personalRepository: personalRepository,
+                                                           expectedDigest: digest)
+                    .write(to: script, atomically: true, encoding: .utf8)
+                let result = BoundedProcessRunner.run("/bin/sh", [script.path,
+                    checksumRoot.appendingPathComponent("nonexistent.app").path, dmg.path,
+                    "2147483647", marker.path, "\(getuid())", "3.4.1+personal.101"],
+                    timeout: 3, maxOutputBytes: 1024)
+                suite.expect(result.status == 1 && !result.timedOut
+                             && (try? String(contentsOf: marker, encoding: .utf8)) == "fail-dmg-verify\n"
+                             && !FileManager.default.fileExists(atPath: dmg.path),
+                             "the actual personal installer rejects missing, malformed or mismatched digests before mounting")
+            }
+        } catch {
+            suite.expect(false, "personal installer checksum fixture: \(error)")
+        }
         suite.expect(UpdateServiceSupport.sha256Matches(Data("abc".utf8), expectedHex: knownDigest),
                "update media accepts its pinned SHA-256 digest")
         suite.expect(!UpdateServiceSupport.sha256Matches(Data("altered".utf8), expectedHex: knownDigest),

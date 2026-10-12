@@ -44,6 +44,7 @@ enum UpdateAdminInstallContract {
         let s = Text()
     }
     class Fixture {
+        var downloadDigest: String?
         func abortInstall(dmgPath: String, offered: String?) { events.append("offer \(offered ?? "")") }
     }
 
