@@ -16,6 +16,8 @@ struct MouseSettings: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(DefaultsKey.scrollInverterEnabled) private var invertVertical = false
     @AppStorage(DefaultsKey.scrollInverterHorizontalEnabled) private var invertHorizontal = false
+    @AppStorage(DefaultsKey.scrollInverterTrackpadEnabled) private var invertTrackpadVertical = false
+    @AppStorage(DefaultsKey.scrollInverterTrackpadHorizontalEnabled) private var invertTrackpadHorizontal = false
     @AppStorage(DefaultsKey.scrollHorizontalEnabled) private var horizontalScrollEnabled = false
     @AppStorage(DefaultsKey.scrollHorizontalModifier) private var horizontalScrollModifier =
         ScrollHorizontalModifier.shift
@@ -127,7 +129,7 @@ struct MouseSettings: View {
     /// the switches below.
     private func isOn(_ feature: AppFeature) -> Bool {
         switch feature {
-        case .scrollInverter: return invertVertical || invertHorizontal
+        case .scrollInverter: return scrollInversionEnabled
         case .scrollHorizontal: return horizontalScrollEnabled
         case .focusFollowsMouse: return focusFollowsMouseEnabled
         case .smoothScroll: return smoothScrollEnabled
@@ -180,6 +182,9 @@ struct MouseSettings: View {
     private var scrollCard: some View {
         SettingsCard(title: l10n.s.scrollSection) {
             if AppFeature.scrollInverter.isAvailable {
+                Text(l10n.s.scrollMouseLabel)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 SettingsRow(symbol: "arrow.up.arrow.down", title: l10n.s.invertVerticalScroll) {
                     Toggle(l10n.s.invertVerticalScroll, isOn: $invertVertical)
                         .labelsHidden()
@@ -196,8 +201,29 @@ struct MouseSettings: View {
                             if scrollDirectionEnabled { permissions.requestAccessibility() }
                         }
                 }
+                Divider()
+                Text(l10n.s.scrollTrackpadLabel)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                SettingsRow(symbol: "arrow.up.arrow.down", title: l10n.s.invertVerticalScroll) {
+                    Toggle(l10n.s.invertVerticalScroll, isOn: $invertTrackpadVertical)
+                        .labelsHidden()
+                        .onChange(of: invertTrackpadVertical) { _, _ in
+                            ScrollInverter.shared.syncWithPreferences()
+                            if scrollDirectionEnabled { permissions.requestAccessibility() }
+                        }
+                }
+                SettingsRow(symbol: "arrow.left.arrow.right", title: l10n.s.invertHorizontalScroll) {
+                    Toggle(l10n.s.invertHorizontalScroll, isOn: $invertTrackpadHorizontal)
+                        .labelsHidden()
+                        .onChange(of: invertTrackpadHorizontal) { _, _ in
+                            ScrollInverter.shared.syncWithPreferences()
+                            if scrollDirectionEnabled { permissions.requestAccessibility() }
+                        }
+                }
             }
             if AppFeature.scrollHorizontal.isAvailable {
+                if AppFeature.scrollInverter.isAvailable { Divider() }
                 SettingsRow(symbol: "arrow.left.and.right", title: l10n.s.scrollHorizontalName,
                             caption: l10n.s.scrollHorizontalCaption) {
                     Toggle(l10n.s.scrollHorizontalName, isOn: $horizontalScrollEnabled)
@@ -553,7 +579,8 @@ struct MouseSettings: View {
     }
 
     private var scrollInversionEnabled: Bool {
-        AppFeature.scrollInverter.isAvailable && (invertVertical || invertHorizontal)
+        AppFeature.scrollInverter.isAvailable
+            && (invertVertical || invertHorizontal || invertTrackpadVertical || invertTrackpadHorizontal)
     }
 
     private var scrollDirectionEnabled: Bool {
