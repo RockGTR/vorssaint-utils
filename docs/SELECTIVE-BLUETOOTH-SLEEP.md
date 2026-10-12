@@ -53,6 +53,8 @@ independent of the scroll-reversal pull request.
 - The main plist and all 14 localized permission plists passed `plutil -lint`.
 - `git diff --check` passed.
 
-These checks ran on an arm64 Mac with macOS 27.0.1 and the macOS 26 SDK. No real
-Bluetooth connections were changed. The hardware scenarios listed above remain
-unverified; native calls already in flight can complete after cancellation.
+These automated checks ran on an arm64 Mac with macOS 27.0.1 and the macOS 26 SDK
+without changing real Bluetooth connections. The user subsequently tested the
+local build and reported that the feature works. Headphone models and individual
+sleep/wake scenarios were not supplied, so those details remain unverified.
+Native calls already in flight can complete after cancellation.
