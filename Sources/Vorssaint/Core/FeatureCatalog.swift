@@ -240,10 +240,7 @@ extension AppFeature {
         case .windowMaximizer: return [DefaultsKey.windowMaximizeEnabled]
         case .autoQuit: return [DefaultsKey.autoQuitEnabled]
         case .spacesOrder: return [DefaultsKey.spacesOrderEnabled]
-        case .scrollInverter: return [DefaultsKey.scrollInverterEnabled,
-                                      DefaultsKey.scrollInverterHorizontalEnabled,
-                                      DefaultsKey.scrollInverterTrackpadEnabled,
-                                      DefaultsKey.scrollInverterTrackpadHorizontalEnabled]
+        case .scrollInverter: return ScrollDirectionSetting.allCases.map(\.defaultsKey)
         case .scrollHorizontal: return [DefaultsKey.scrollHorizontalEnabled]
         case .focusFollowsMouse: return [DefaultsKey.focusFollowsMouseEnabled]
         case .smoothScroll: return [DefaultsKey.smoothScrollEnabled]

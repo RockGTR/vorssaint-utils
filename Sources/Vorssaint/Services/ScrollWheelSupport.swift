@@ -5,6 +5,47 @@ import Foundation
 import CoreGraphics
 import Darwin
 
+/// The same four settings are offered in Settings, Quick Controls and Command
+/// Bar. Keep their keys, names and durable action IDs together.
+enum ScrollDirectionSetting: CaseIterable, Hashable, Identifiable {
+    case mouseVertical, mouseHorizontal, trackpadVertical, trackpadHorizontal
+
+    var id: Self { self }
+
+    var defaultsKey: String {
+        switch self {
+        case .mouseVertical: return DefaultsKey.scrollInverterEnabled
+        case .mouseHorizontal: return DefaultsKey.scrollInverterHorizontalEnabled
+        case .trackpadVertical: return DefaultsKey.scrollInverterTrackpadEnabled
+        case .trackpadHorizontal: return DefaultsKey.scrollInverterTrackpadHorizontalEnabled
+        }
+    }
+
+    var commandID: String {
+        switch self {
+        case .mouseVertical: return "toggle.scrollInverter.vertical"
+        case .mouseHorizontal: return "toggle.scrollInverter.horizontal"
+        case .trackpadVertical: return "toggle.scrollInverter.trackpad.vertical"
+        case .trackpadHorizontal: return "toggle.scrollInverter.trackpad.horizontal"
+        }
+    }
+
+    var isTrackpad: Bool { self == .trackpadVertical || self == .trackpadHorizontal }
+    var isVertical: Bool { self == .mouseVertical || self == .trackpadVertical }
+    var symbolName: String { isTrackpad ? "hand.draw" : "computermouse" }
+
+    func title(_ strings: Strings) -> String {
+        let device = isTrackpad ? strings.scrollTrackpadLabel : strings.scrollMouseLabel
+        let axis = isVertical ? strings.invertVerticalScroll : strings.invertHorizontalScroll
+        return "\(device) · \(axis)"
+    }
+
+    static func searchKeywords(_ strings: Strings) -> [String] {
+        allCases.map { $0.title(strings) }
+            + [strings.scrollMouseLabel, strings.scrollTrackpadLabel, strings.scrollTrackpadNote]
+    }
+}
+
 enum ScrollHorizontalModifier: String, CaseIterable {
     case shift, option, control, command
 
@@ -162,6 +203,7 @@ enum ScrollWheelSupport {
     static func applyDirection(to event: CGEvent, isContinuous: Bool,
                                invertVertical: Bool, invertHorizontal: Bool,
                                horizontalModifier: ScrollHorizontalModifier?,
+                               updatesHID: Bool = false,
                                targetsOwnWindow: @autoclosure () -> Bool = false) {
         let redirected = event.getIntegerValueField(.eventSourceUserData) == horizontalRedirectTag
             || (horizontalModifier.map {
@@ -189,7 +231,9 @@ enum ScrollWheelSupport {
         // Some apps read the attached HID scroll data during momentum. Keep
         // it in agreement with Quartz rather than reversing only the finger
         // phase. Synthetic events may have no HID payload at all.
-        let hidScroll = isContinuous && (plan.vertical || plan.horizontal)
+        // Only the touch path opts into the new HID behavior. Wheel-only
+        // linear caps and modifier redirection retain their existing path.
+        let hidScroll = updatesHID && isContinuous && (plan.vertical || plan.horizontal)
             ? ScrollHIDDirection.capture(event) : nil
         if plan.vertical {
             event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: -verticalLine)

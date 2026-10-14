@@ -185,8 +185,9 @@ struct MouseSettings: View {
                 Text(l10n.s.scrollMouseLabel)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
                 SettingsRow(symbol: "arrow.up.arrow.down", title: l10n.s.invertVerticalScroll) {
-                    Toggle(l10n.s.invertVerticalScroll, isOn: $invertVertical)
+                    Toggle(ScrollDirectionSetting.mouseVertical.title(l10n.s), isOn: $invertVertical)
                         .labelsHidden()
                         .onChange(of: invertVertical) { _, _ in
                             ScrollInverter.shared.syncWithPreferences()
@@ -194,7 +195,7 @@ struct MouseSettings: View {
                         }
                 }
                 SettingsRow(symbol: "arrow.left.arrow.right", title: l10n.s.invertHorizontalScroll) {
-                    Toggle(l10n.s.invertHorizontalScroll, isOn: $invertHorizontal)
+                    Toggle(ScrollDirectionSetting.mouseHorizontal.title(l10n.s), isOn: $invertHorizontal)
                         .labelsHidden()
                         .onChange(of: invertHorizontal) { _, _ in
                             ScrollInverter.shared.syncWithPreferences()
@@ -205,8 +206,9 @@ struct MouseSettings: View {
                 Text(l10n.s.scrollTrackpadLabel)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
                 SettingsRow(symbol: "arrow.up.arrow.down", title: l10n.s.invertVerticalScroll) {
-                    Toggle(l10n.s.invertVerticalScroll, isOn: $invertTrackpadVertical)
+                    Toggle(ScrollDirectionSetting.trackpadVertical.title(l10n.s), isOn: $invertTrackpadVertical)
                         .labelsHidden()
                         .onChange(of: invertTrackpadVertical) { _, _ in
                             ScrollInverter.shared.syncWithPreferences()
@@ -214,7 +216,7 @@ struct MouseSettings: View {
                         }
                 }
                 SettingsRow(symbol: "arrow.left.arrow.right", title: l10n.s.invertHorizontalScroll) {
-                    Toggle(l10n.s.invertHorizontalScroll, isOn: $invertTrackpadHorizontal)
+                    Toggle(ScrollDirectionSetting.trackpadHorizontal.title(l10n.s), isOn: $invertTrackpadHorizontal)
                         .labelsHidden()
                         .onChange(of: invertTrackpadHorizontal) { _, _ in
                             ScrollInverter.shared.syncWithPreferences()

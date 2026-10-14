@@ -221,7 +221,7 @@ final class ScrollInverter: ObservableObject {
                     to: event, isContinuous: true,
                     invertVertical: direction.invertTrackpadVertical,
                     invertHorizontal: direction.invertTrackpadHorizontal,
-                    horizontalModifier: nil)
+                    horizontalModifier: nil, updatesHID: true)
             }
             return Unmanaged.passUnretained(event)
         }
