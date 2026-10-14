@@ -410,6 +410,7 @@ struct Strings {
     let switcherWindowlessAppsOff: String
     let switcherWindowlessAppsFinder: String
     let switcherWindowlessAppsAll: String
+    let switcherWindowlessAppsLockedFormat: String
     let switcherNoOpenWindow: String
     let switcherOtherDesktop: String
     let dockPreviewName: String
@@ -1548,6 +1549,7 @@ extension Strings {
         switcherWindowlessAppsOff: "Não mostrar",
         switcherWindowlessAppsFinder: "Só o Finder",
         switcherWindowlessAppsAll: "Todos os apps",
+        switcherWindowlessAppsLockedFormat: "Todos os apps abertos continuam acessíveis enquanto “%@” estiver ativado. Desative para escolher.",
         switcherNoOpenWindow: "Sem janela aberta",
         switcherOtherDesktop: "Outra Mesa",
         dockPreviewName: "Dock Preview",
@@ -2332,7 +2334,7 @@ extension Strings {
         highlightsTry: "Experimentar",
         highlightsSeeAll: "Ver todas as mudanças",
         switcherCurrentSpaceOnly: "Mostrar só a Mesa atual",
-        switcherCurrentSpaceOnlyCaption: "Mostra no alternador apenas as janelas da Mesa em que você está. Escolher uma janela nunca leva você para outra Mesa.",
+        switcherCurrentSpaceOnlyCaption: "Mostra as janelas da Mesa atual. Janelas em tela cheia de outras Mesas também aparecem enquanto “Mostrar janelas em tela cheia” estiver ativo.",
         shelfFileMissing: "O arquivo não existe mais",
         previewSizeSmall: "Pequeno",
         mixerSoundEffectsOutputTitle: "Sons do sistema",
@@ -2649,6 +2651,7 @@ extension Strings {
         switcherWindowlessAppsOff: "Do not show",
         switcherWindowlessAppsFinder: "Finder only",
         switcherWindowlessAppsAll: "All apps",
+        switcherWindowlessAppsLockedFormat: "All running apps stay reachable while “%@” is on. Turn it off to choose.",
         switcherNoOpenWindow: "No open window",
         switcherOtherDesktop: "Other desktop",
         dockPreviewName: "Dock Preview",
@@ -3433,7 +3436,7 @@ extension Strings {
         highlightsTry: "Try it",
         highlightsSeeAll: "See all changes",
         switcherCurrentSpaceOnly: "Show only the current desktop",
-        switcherCurrentSpaceOnlyCaption: "Lists only windows from the desktop you are on. Picking a window never moves you to another desktop.",
+        switcherCurrentSpaceOnlyCaption: "Lists windows from the current desktop. Fullscreen windows from other desktops also appear while “Show fullscreen windows” is on.",
         shelfFileMissing: "The file no longer exists",
         previewSizeSmall: "Small",
         mixerSoundEffectsOutputTitle: "System sounds",
